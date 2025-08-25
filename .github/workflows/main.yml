@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   AWS_REGION: "ap-southeast-1"           # change if needed
   S3_BUCKET: ${{ secrets.S3_BUCKET }}     # e.g. my-website-bucket
   CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} # optional
