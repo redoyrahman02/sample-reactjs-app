@@ -49,11 +49,7 @@ jobs:
           elif [ -d build ]; then echo "BUILD_DIR=build" >> $GITHUB_ENV;
           else echo "❌ Could not find build output (dist/ or build/)." && exit 1; fi
 
-      - name: Configure AWS credentials (OIDC; recommended)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}   # create an IAM role for GitHub OIDC
-          aws-region: ${{ env.AWS_REGION }}
+     
 
       # --- If you prefer access keys instead of OIDC, comment the step above and uncomment this:
       - name: Configure AWS credentials (Access Keys)
