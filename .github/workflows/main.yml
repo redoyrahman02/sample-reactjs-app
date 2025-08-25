@@ -22,6 +22,7 @@ env:
 
 jobs:
   build-and-deploy:
+    environment: main
     runs-on: ubuntu-latest
 
     steps:
