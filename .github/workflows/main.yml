@@ -47,7 +47,7 @@ jobs:
         run: |
           if [ -d dist ]; then echo "BUILD_DIR=dist" >> $GITHUB_ENV;
           elif [ -d build ]; then echo "BUILD_DIR=build" >> $GITHUB_ENV;
-          else echo "❌ Could not find build output (dist/ or build/)." && exit 1; fi
+          else echo "build output (dist/ or build/)." && exit 1; fi
 
      
 
