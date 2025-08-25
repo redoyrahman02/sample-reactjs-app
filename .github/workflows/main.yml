@@ -1,0 +1,93 @@
+name: Deploy React to S3
+
+on:
+  push:
+    branches: [ "main" ]   # change if you deploy from another branch
+  workflow_dispatch:
+
+# Least-privileged permissions + OIDC (recommended)
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-to-s3-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  AWS_REGION: "ap-southeast-1"           # change if needed
+  S3_BUCKET: ${{ secrets.S3_BUCKET }}     # e.g. my-website-bucket
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} # optional
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build React app
+        run: |
+          # Works for CRA and Vite as long as "build" script exists
+          npm run build
+
+      - name: Determine build output directory
+        run: |
+          if [ -d dist ]; then echo "BUILD_DIR=dist" >> $GITHUB_ENV;
+          elif [ -d build ]; then echo "BUILD_DIR=build" >> $GITHUB_ENV;
+          else echo "❌ Could not find build output (dist/ or build/)." && exit 1; fi
+
+      - name: Configure AWS credentials (OIDC; recommended)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}   # create an IAM role for GitHub OIDC
+          aws-region: ${{ env.AWS_REGION }}
+
+      # --- If you prefer access keys instead of OIDC, comment the step above and uncomment this:
+      # - name: Configure AWS credentials (Access Keys)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      #     aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
+
+      # Long-cache static assets (everything except HTML) for fast loads
+      - name: Upload static assets (cacheable)
+        run: |
+          aws s3 sync "$BUILD_DIR" "s3://${S3_BUCKET}" \
+            --delete \
+            --exclude "index.html" --exclude "*.html" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --only-show-errors
+
+      # No-cache HTML entry points to avoid stale pages
+      - name: Upload HTML entry points (no-store) + SPA fallback
+        run: |
+          aws s3 cp "$BUILD_DIR/index.html" "s3://${S3_BUCKET}/index.html" \
+            --cache-control "no-store" --content-type "text/html" --only-show-errors
+          # Ensure SPA fallback works on S3 static website hosting:
+          aws s3 cp "$BUILD_DIR/index.html" "s3://${S3_BUCKET}/404.html" \
+            --cache-control "no-store" --content-type "text/html" --only-show-errors
+
+      - name: (Optional) Invalidate CloudFront cache
+        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/index.html" "/404.html" "/"
